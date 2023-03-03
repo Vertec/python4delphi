@@ -51,11 +51,7 @@
 
 {$I definition.inc}
 
-{$IFDEF CPUX64}
-  Error!! This unit is not supported in 64bit due dirty casts of pointers to DISPIDS
-{$ENDIF}
-
-unit PythonAtom deprecated 'consider using VarPyth instead';
+unit PythonAtom{$IFDEF WIN64} deprecated 'consider using VarPyth instead'{$ENDIF};
 
 interface
 
@@ -153,7 +149,7 @@ type
 
   {** This helper function converts a python object into a python atom. Look at
       the trivial implementation of this function for more informations.} 
-  function GetAtom(pObject : PPyObject) : OleVariant; deprecated;
+  function GetAtom(pObject : PPyObject) : OleVariant; // deprecated;
 
   {$IFDEF DEBUG}
   {** If this variable is set, (and DEBUG directive is defined) the strings is
@@ -184,9 +180,9 @@ begin
     if W = #0 then Break;
     if W >= #256 then W := #0;
     Inc(I);
-    S[I] := Char(W);
+    S[I] := AnsiChar(W);
   until I = 255;
-  S[0] := Char(I);
+  S[0] := AnsiChar(I);
 end;
 
 
@@ -237,7 +233,7 @@ begin
   lNames := Names;
   lDispIds:=DispIDs;
   WideCharToShortString(lNames[0], lName);
-  lLongName := lName;
+  lLongName := string(lName);
 
   {$IFDEF DEBUG}DebugMessageFmt('TPythonAtom.GetIDsOfNames(IID=%s, NameCount=%d, LocaleID=%d, Names=%s)',[GUIDToString(IID), NameCount, LocaleID, lLongName]);{$ENDIF}
 
@@ -255,14 +251,14 @@ begin
     end
   else
     begin
-      if GetPythonEngine.PyObject_HasAttrString(FPythonObject, pChar(lLongName))=0
+      if GetPythonEngine.PyObject_HasAttrString(FPythonObject, PAnsiChar(AnsiString(lLongName)))=0
       then
         begin
           result := E_NOINTERFACE;
         end
       else
         begin
-          lObject := GetPythonEngine.PyString_FromString(PChar(lLongName));
+          lObject := GetPythonEngine.PyString_FromString(PAnsiChar(AnsiString(lLongName)));
           lDispIds[0]:= Integer(lObject);  // Dirty storage !
           result := S_OK;
         end;

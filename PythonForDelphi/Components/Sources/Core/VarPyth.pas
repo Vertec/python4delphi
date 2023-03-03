@@ -115,7 +115,7 @@ function iter(const AValue : Variant ) : Variant; // return an iterator for the 
 implementation
 
 uses
-  VarUtils, SysUtils, SysConst, TypInfo, Classes;
+  System.VarUtils, SysUtils, SysConst, TypInfo, Classes;
 
 type
   TNamedParamDesc = record
@@ -355,11 +355,14 @@ end;
 function GetAtom( AObject : PPyObject ) : Variant;
 begin
   VarClear(Result);
-  if Assigned(AObject) then
+  if Assigned(AObject) and (AObject<>GetPythonEngine.Py_None) then
   begin
     TPythonVarData(Result).VType := VarPython;
     TPythonVarData(Result).VPython := TPythonData.Create(AObject, True);
-  end; // of if
+  end
+  else
+    if (AObject=GetPythonEngine.Py_None) then
+      Result:=NULL;
 end;
 
 function VarPython: TVarType;
@@ -830,9 +833,28 @@ procedure TPythonVariantType.CastTo(var Dest: TVarData;
   const Source: TVarData; const AVarType: TVarType);
 var
   V : Variant;
+
+  function GetSequenceItem( sequence : PPyObject; idx : Integer ) : Variant;
+  var
+    val : PPyObject;
+  begin
+    with GetPythonEngine do
+    begin
+      val := PySequence_GetItem( sequence, idx );
+      try
+        Result := PyObjectAsVariant( val );
+      finally
+        Py_XDecRef( val );
+      end;
+    end;
+  end;
+
+var
+  i, seq_length : Integer;
 begin
   if Source.VType = VarType then
-    case AVarType of
+    case AVarType and varTypeMask of
+      varEmpty, varNull: ;
       varOleStr {$IFDEF UNICODE}, varUString {$ENDIF} :
         VarDataFromOleStr(Dest, TPythonVarData(Source).VPython.AsWideString);
       varString:
@@ -842,11 +864,128 @@ begin
         {$ELSE}
         VarDataFromStr(Dest, TPythonVarData(Source).VPython.AsString);
         {$ENDIF}
+      varDate:
+        begin
+          if GetPythonEngine.ExtractDate(TPythonVarData(Source).VPython.PyObject, V ) then
+          begin
+            VarDataCastTo(Dest, TVarData(V), varDate);
+          end
+          else
+            Clear(Dest);
+        end;
+      varSingle:
+        begin
+          if GetPythonEngine.PyFloat_Check(TPythonVarData(Source).VPython.PyObject) then
+          begin
+            Dest.VType := varSingle;
+            Dest.VSingle := GetPythonEngine.PyFloat_AsDouble(TPythonVarData(Source).VPython.PyObject)
+          end
+          else
+            if GetPythonEngine.PyInt_Check(TPythonVarData(Source).VPython.PyObject) then
+            begin
+              Dest.VType := varSingle;
+              Dest.VSingle := GetPythonEngine.PyInt_AsLong(TPythonVarData(Source).VPython.PyObject)
+            end
+            else
+              Clear(Dest);
+        end;
+      varDouble:
+        begin
+          if GetPythonEngine.ExtractDate(TPythonVarData(Source).VPython.PyObject, V )  then
+            VarDataCastTo(Dest, TVarData(V), varDouble)
+          else
+          begin
+            if GetPythonEngine.PyFloat_Check(TPythonVarData(Source).VPython.PyObject) then
+            begin
+              Dest.VType := varDouble;
+              Dest.VDouble := GetPythonEngine.PyFloat_AsDouble(TPythonVarData(Source).VPython.PyObject)
+            end
+            else
+              if GetPythonEngine.PyInt_Check(TPythonVarData(Source).VPython.PyObject) then
+              begin
+                Dest.VType := varDouble;
+                Dest.VDouble := GetPythonEngine.PyInt_AsLong(TPythonVarData(Source).VPython.PyObject)
+              end
+              else
+                Clear(Dest);
+          end;
+        end;
+      varBoolean:
+        begin
+          Dest.VType := varBoolean;
+          Dest.VBoolean := GetPythonEngine.PyObject_IsTrue( TPythonVarData(Source).VPython.PyObject ) = 1;
+        end;
+      varInteger:
+        begin
+          if GetPythonEngine.PyInt_Check(TPythonVarData(Source).VPython.PyObject) then
+          begin
+            Dest.VType := varInteger;
+            Dest.VInteger := GetPythonEngine.PyInt_AsLong(TPythonVarData(Source).VPython.PyObject);
+          end
+          else
+            if GetPythonEngine.PyFloat_Check(TPythonVarData(Source).VPython.PyObject) then
+            begin
+              Dest.VType := varInteger;
+              Dest.VInteger := Round(GetPythonEngine.PyFloat_AsDouble(TPythonVarData(Source).VPython.PyObject));
+            end
+            else
+              Clear(Dest);
+        end;
+      varInt64:
+        begin
+          if GetPythonEngine.PyLong_Check(TPythonVarData(Source).VPython.PyObject) then
+          begin
+            Dest.VType  := varInt64;
+            Dest.VInt64 := GetPythonEngine.PyLong_AsLongLong(TPythonVarData(Source).VPython.PyObject)
+          end
+          else
+            if GetPythonEngine.PyInt_Check(TPythonVarData(Source).VPython.PyObject) then
+            begin
+              Dest.VType := varInt64;
+              Dest.VInt64 := GetPythonEngine.PyInt_AsLong(TPythonVarData(Source).VPython.PyObject)
+            end
+            else
+              Clear(Dest);
+        end;
+      varUInt64:
+        begin
+          if GetPythonEngine.PyLong_Check(TPythonVarData(Source).VPython.PyObject) then
+          begin
+            Dest.VType  := varUInt64;
+            Dest.VUInt64 := GetPythonEngine.PyLong_AsLongLong(TPythonVarData(Source).VPython.PyObject)
+          end
+          else
+            if GetPythonEngine.PyInt_Check(TPythonVarData(Source).VPython.PyObject) then
+            begin
+              Dest.VType := varUInt64;
+              Dest.VUInt64 := GetPythonEngine.PyInt_AsLong(TPythonVarData(Source).VPython.PyObject)
+            end
+            else
+              Clear(Dest);
+        end;
     else
-      if AVarType and varTypeMask = varBoolean then
+      if GetPythonEngine.PySequence_Check( TPythonVarData(Source).VPython.PyObject ) = 1 then
       begin
-        Dest.VType := varBoolean;
-        Dest.VBoolean := GetPythonEngine.PyObject_IsTrue( TPythonVarData(Source).VPython.PyObject ) = 1;
+        seq_length := GetPythonEngine.PySequence_Length( TPythonVarData(Source).VPython.PyObject );
+        // if we have at least one object in the sequence,
+        if seq_length > 0 then
+          // we try to get the first one, simply to test if the sequence API
+          // is really implemented.
+          GetPythonEngine.Py_XDecRef( GetPythonEngine.PySequence_GetItem( TPythonVarData(Source).VPython.PyObject, 0 ) );
+        // check if the Python object did really implement the sequence API
+        if GetPythonEngine.PyErr_Occurred = nil then
+          begin
+            // Convert a Python sequence into an array of Variant
+            V := VarArrayCreate( [0, seq_length-1], varVariant );
+            for i := 0 to GetPythonEngine.PySequence_Length( TPythonVarData(Source).VPython.PyObject )-1 do
+              V[i] := GetSequenceItem( TPythonVarData(Source).VPython.PyObject, i );
+            VarDataCastTo(Dest, TVarData(V), AVarType or varArray);
+          end
+        else // the object didn't implement the sequence API, so we return Null
+          begin
+            GetPythonEngine.PyErr_Clear;
+            Clear(Dest);
+          end;
       end
       else
       begin
@@ -1114,8 +1253,11 @@ begin
 end;
 
 {$ELSE USESYSTEMDISPINVOKE}
+var
+  tmp: TVarData;
 begin
-  DoDispInvoke(Dest, Source, CallDesc, Params);
+  tmp := Source;
+  DoDispInvoke(Dest, tmp, CallDesc, Params);
 end;
 
 procedure TPythonVariantType.DoDispInvoke(Dest: PVarData;

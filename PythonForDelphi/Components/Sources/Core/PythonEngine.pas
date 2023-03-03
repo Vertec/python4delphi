@@ -58,12 +58,6 @@ unit PythonEngine;
 { TODO -oMMM : implement tp_as_buffer slot }
 { TODO -oMMM : implement Attribute descriptor and subclassing stuff }
 
-{$IFNDEF FPC}
-  {$IFNDEF DELPHI7_OR_HIGHER}
-      Error! Delphi 7 or higher is required!
-  {$ENDIF}
-{$ENDIF}
-
 interface
 
 uses
@@ -100,6 +94,7 @@ uses
 
 type
 {$IFNDEF UNICODE}
+  RawByteString = AnsiString;
   UnicodeString = WideString;
   TUnicodeStringList = TWideStringList;
 {$ELSE}
@@ -107,17 +102,6 @@ type
 {$ENDIF}
 
 {$IFNDEF FPC}
-  {$IF CompilerVersion < 21}
-    NativeInt = integer;
-    NativeUInt = Cardinal;
-  {$IFEND}
-  PNativeInt = ^NativeInt;
-{$ELSE}
-  {$IF DEFINED(FPC_FULLVERSION) and (FPC_FULLVERSION >= 20500)}
-  {$ELSE}
-    NativeInt = integer;
-    NativeUInt = Cardinal;
-  {$IFEND}
   PNativeInt = ^NativeInt;
 {$ENDIF}
 
@@ -1437,9 +1421,6 @@ type
   IOString = UnicodeString;
   TIOStringList = TUnicodeStringList;
 
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPythonInputOutput = class(TComponent)
   protected
     FMaxLines        : Integer;
@@ -1743,6 +1724,7 @@ type
     PyInt_FromLong:     function( x: LongInt):PPyObject; cdecl;
     PyArg_Parse:        function( args: PPyObject; format: PAnsiChar {;....}) :  Integer; cdecl varargs;
     PyArg_ParseTuple:   function( args: PPyObject; format: PAnsiChar {;...}): Integer; cdecl varargs;
+    PyArg_ParseTupleAndKeywords:   function( args: PPyObject; kwargs: PPyObject; format: PAnsiChar; keywords: PPAnsiChar {;...}): Integer; cdecl varargs;
     Py_BuildValue:      function( format: PAnsiChar {;...}): PPyObject; cdecl varargs;
     Py_Initialize:      procedure; cdecl;
     Py_Exit:            procedure( RetVal: Integer); cdecl;
@@ -1765,6 +1747,7 @@ type
     PyDictProxy_New: function (obj : PPyObject) : PPyObject; cdecl;
     PyModule_GetDict:     function( module:PPyObject): PPyObject; cdecl;
     PyObject_Str:         function( v: PPyObject): PPyObject; cdecl;
+    PyObject_Unicode:     function( v: PPyObject): PPyObject; cdecl;
     PyRun_String:         function( str: PAnsiChar; start: Integer; globals: PPyObject;
                                     locals: PPyObject): PPyObject; cdecl;
     PyRun_SimpleString:   function( str: PAnsiChar): Integer; cdecl;
@@ -1985,6 +1968,7 @@ type
     PyErr_NewException              : function ( name : PAnsiChar; base, dict : PPyObject ) : PPyObject; cdecl;
     Py_Malloc                       : function ( size : NativeInt ) : Pointer;
     PyMem_Malloc                    : function ( size : NativeInt ) : Pointer;
+    PyMem_Free                      : procedure ( p : Pointer ); cdecl;
 
 {New exported Objects in Python 1.5}
     Py_SetProgramName               : procedure( name: PAnsiChar); cdecl;
@@ -2120,6 +2104,9 @@ type
   function PyString_AsDelphiString( ob: PPyObject): string;  virtual; abstract;
   procedure Py_FlushLine; cdecl;
 
+  // custom functions
+  function PyBool_FromBoolean(const ok: Boolean) : PPyObject;
+
   // Constructors & Destructors
   constructor Create(AOwner: TComponent); override;
 
@@ -2181,9 +2168,6 @@ type
       property Limit : Integer read FLimit write FLimit;
   end;
 
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPythonEngine = class(TPythonInterface)
   private
     FInitScript:                 TStrings;
@@ -2279,6 +2263,7 @@ type
     function   CheckSyntax( const str : AnsiString; mode : Integer ) : Boolean;
     procedure  RaiseError;
     function   PyObjectAsString( obj : PPyObject ) : String;
+    function   ExtractDate(obj: PPyObject; var date: Variant): Boolean;
     procedure  DoRedirectIO;
     procedure  AddClient( client : TEngineClient );
     procedure  RemoveClient( client : TEngineClient );
@@ -2342,6 +2327,7 @@ type
     property InitThreads: Boolean read FInitThreads write SetInitThreads default False;
     property IO: TPythonInputOutput read FIO write FIO;
     property PyFlags: TPythonFlags read FPyFlags write SetPyFlags default [];
+    property PythonHome: string write SetPythonHome;
     property RedirectIO: Boolean read FRedirectIO write FRedirectIO default True;
     property UseWindowsConsole: Boolean read FUseWindowsConsole write FUseWindowsConsole default False;
     property Version : String read GetVersion write SetVersion stored False;
@@ -2655,9 +2641,6 @@ type
     property Items[Index: Integer]: TError read GetError write SetError; default;
   end;
 
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPythonModule = class(TMethodsContainer)
     protected
       FModuleName : AnsiString;
@@ -2921,9 +2904,6 @@ type
 
   // The component that initializes the Python type and
   // that creates instances of itself.
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPythonType = class(TGetSetContainer)
     protected
       FType : PyTypeObject;
@@ -3009,9 +2989,6 @@ type
   TExtGetDataEvent = procedure ( Sender : TObject; var Data : PPyObject ) of Object;
   TExtSetDataEvent = procedure ( Sender : TObject; Data : PPyObject) of Object;
 
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPythonDelphiVar = class( TEngineClient )
     protected
       FModule    : AnsiString;
@@ -3813,12 +3790,14 @@ begin
     PyInt_FromLong          := Import('PyInt_FromLong');
   PyArg_Parse               := Import('PyArg_Parse');
   PyArg_ParseTuple          := Import('PyArg_ParseTuple');
+  PyArg_ParseTupleAndKeywords          := Import('PyArg_ParseTupleAndKeywords');
   Py_BuildValue             := Import('Py_BuildValue');
   Py_Initialize             := Import('Py_Initialize');
   PyDict_New                := Import('PyDict_New');
   PyDict_SetItemString      := Import('PyDict_SetItemString');
   PyModule_GetDict          := Import('PyModule_GetDict');
   PyObject_Str              := Import('PyObject_Str');
+  PyObject_Unicode          := Import('PyObject_Unicode');
   PyRun_String              := Import('PyRun_String');
   PyRun_SimpleString        := Import('PyRun_SimpleString');
   PyDict_GetItemString      := Import('PyDict_GetItemString');
@@ -4092,6 +4071,7 @@ begin
   try
     Py_Malloc := Import ('PyMem_Malloc');
     PyMem_Malloc := Import ('PyMem_Malloc');
+    PyMem_Free := Import ('PyMem_Free');
   except
   end;
   if not IsPython3000 then
@@ -4119,6 +4099,14 @@ begin
   PyErr_SetInterrupt       := Import('PyErr_SetInterrupt');
   PyGILState_Ensure        := Import('PyGILState_Ensure');
   PyGILState_Release       := Import('PyGILState_Release');
+end;
+
+function TPythonInterface.PyBool_FromBoolean(const ok: Boolean) : PPyObject;
+begin
+  if ok then
+    result := PyBool_FromLong(1)
+  else
+    result := PyBool_FromLong(0);
 end;
 
 procedure TPythonInterface.Py_INCREF(op: PPyObject);
@@ -4629,6 +4617,13 @@ begin
            (AOwner.Components[i] <> Self) then
           raise Exception.Create('You can''t drop more than one TPythonEngine component');
     end;
+
+  // vertec: moved assignment of gPythonEngine from initialize
+  // to here to allow accessing python engine via global in components registration
+  if Assigned(gPythonEngine) then
+    raise Exception.Create('There is already one instance of TPythonEngine running' );
+
+  gPythonEngine := Self;
 end;
 
 destructor TPythonEngine.Destroy;
@@ -4848,9 +4843,6 @@ procedure TPythonEngine.Initialize;
 var
   i : Integer;
 begin
-  if Assigned(gPythonEngine) then
-    raise Exception.Create('There is already one instance of TPythonEngine running' );
-
   {$IFDEF FPC}
   //this allows you to just call Initialize to create a non-IDE instance with
   //Lazarus.
@@ -4860,7 +4852,6 @@ begin
   end;
   {$ENDIF}
 
-  gPythonEngine := Self;
   CheckRegistry;
   if IsPython3000 then begin
     if Assigned(Py_SetProgramName3000) then
@@ -4880,7 +4871,7 @@ begin
   AssignPyFlags;
   if FPythonHomeW <> '' then begin
     if IsPython3000 then
-      Py_SetPythonHome3000(PChar(FPythonHomeW))
+      Py_SetPythonHome3000(PWideChar(FPythonHomeW))
     else
       Py_SetPythonHome(PAnsiChar(FPythonHome));
   end;
@@ -5307,6 +5298,18 @@ begin
     _globals := PyModule_GetDict(m);
 
   try
+    //Control Word $133F =
+    //  T8087Exception_AllowInvalidNumbers,
+    //  T8087Exception_AllowDenormals,
+    //  T8087Exception_AllowDivideByZero,
+    //  T8087Exception_AllowOverflow,
+    //  T8087Exception_AllowUnderflow,
+    //  T8087Exception_AllowInexactPrecision,
+    //  T8087Infinity_Affine,
+    //  T8087Precision_Extended,
+    //  T8087Rounding_NearestOrEven
+    Set8087CW($133F);
+
     Result := PyRun_String(PAnsiChar(CleanString(command)), mode, _globals, _locals);
     if Result = nil then
       CheckError(False);
@@ -5372,7 +5375,9 @@ begin
   n := PyParser_SimpleParseString( PAnsiChar(str), mode );
   result := Assigned(n);
   if Assigned( n ) then
-    PyNode_Free(n);
+    PyNode_Free(n)
+  else
+    PyErr_Clear;   // result nil means that an error has been set
 end;
 
 procedure TPythonEngine.RaiseError;
@@ -5595,8 +5600,6 @@ end;
 function TPythonEngine.PyObjectAsString( obj : PPyObject ) : String;
 var
   s : PPyObject;
-//  i : Integer;
-//  tmp : PAnsiChar;
   w : UnicodeString;
 begin
   CheckPython;
@@ -5610,17 +5613,12 @@ begin
     Result := w;
     Exit;
   end;
-  s := PyObject_Str( obj );
-  if Assigned(s) and PyString_Check(s) then
-    begin
-      Result := PyString_AsDelphiString(s);
-//      tmp := PyString_AsString(s);
-//      SetLength( Result, PyString_Size(s)+1 );
-//      Result := '';
-//      for i := 0 to PyString_Size(s) - 1 do
-//        Insert( tmp[i], Result, i+1 );
-    end;
-  Py_XDECREF(s);
+  s := PyObject_Unicode( obj );
+  if Assigned(s) then
+  begin
+    Result := PyUnicode_AsWideString(s);
+    Py_XDECREF(s);
+  end;
 end;
 
 procedure TPythonEngine.DoRedirectIO;
@@ -5901,7 +5899,7 @@ begin
       {$IFDEF PREFER_UNICODE}
         Result := PyUnicode_FromWideChar( PWideChar(wStr), Length(wStr) );
       {$ELSE}
-        s := wStr;
+        s := AnsiString(wStr);
         Result := PyString_FromStringAndSize(PAnsiChar(s), Length(s));
       {$ENDIF}
       end;
@@ -5917,7 +5915,7 @@ begin
       {$IFDEF PREFER_UNICODE}
         Result := PyUnicode_FromWideChar( PWideChar(wStr), Length(wStr) );
       {$ELSE}
-        s := wStr;
+        s := AnsiString(wStr);
         Result := PyString_FromStringAndSize(PAnsiChar(s), Length(s));
       {$ENDIF}
       end;
@@ -5957,116 +5955,116 @@ begin
   end; // of case
 end;
 
-function TPythonEngine.PyObjectAsVariant( obj : PPyObject ) : Variant;
+function TPythonEngine.ExtractDate(obj: PPyObject; var date : Variant ) : Boolean;
 
-  function ExtractDate( var date : Variant ) : Boolean;
-
-    function GetStructMember( obj : PPyObject; const AMember : AnsiString ) : Integer;
-    var
-      member : PPyObject;
-    begin
-      member := PyObject_GetAttrString( obj, PAnsiChar(AMember) );
-      CheckError(False);
-      if PyInt_Check(member) then
-        Result := PyInt_AsLong(member)
-      else
-        raise EPythonError.CreateFmt('Unexpected type found in member %s of a time_struct object', [AMember]);
-      Py_XDecRef(member);
-    end;
-
+  function GetStructMember( obj : PPyObject; const AMember : AnsiString ) : Integer;
   var
-    i, wd, jd, dl : Integer;
-    dt : TDateTime;
-    y, m, d, h, mi, sec, msec : WORD;
-    delta : PPyDateTime_Delta;
+    member : PPyObject;
   begin
-    Result := False;
-    if PyTimeStruct_Check( obj ) then
-    begin
-        y   := GetStructMember( obj, 'tm_year' );
-        m   := GetStructMember( obj, 'tm_mon' );
-        d   := GetStructMember( obj, 'tm_mday' );
-        h   := GetStructMember( obj, 'tm_hour' );
-        mi  := GetStructMember( obj, 'tm_min' );
-        sec := GetStructMember( obj, 'tm_sec' );
-        //wd  := GetStructMember( obj, 'tm_wday' );
-        //jd  := GetStructMember( obj, 'tm_yday' );
-        //dl  := GetStructMember( obj, 'tm_isdst' );
-        dt := EncodeDate( y, m, d ) + EncodeTime( h, mi, sec, 0 );
-        Date := dt;
-        Result := True;
-    end
-    else if PyDateTime_Check( obj ) then
-    begin
-        y   := GetStructMember(obj, 'year');
-        m   := GetStructMember(obj, 'month');
-        d   := GetStructMember(obj, 'day');
-        h := GetStructMember(obj, 'hour');
-        mi := GetStructMember(obj, 'minute');
-        sec := GetStructMember(obj, 'second');
-        msec := GetStructMember(obj, 'microsecond') div 1000;
-        dt := EncodeDate( y, m, d ) + EncodeTime( h, mi, sec, msec );
-        Date := dt;
-        Result := True;
-    end
-    else if PyDate_Check( obj ) then
-    begin
-        y   := GetStructMember(obj, 'year');
-        m   := GetStructMember(obj, 'month');
-        d   := GetStructMember(obj, 'day');
-        dt  := EncodeDate( y, m, d );
-        Date := dt;
-        Result := True;
-    end
-    else if PyTime_Check( obj ) then
-    begin
-        h := GetStructMember(obj, 'hour');
-        mi := GetStructMember(obj, 'minute');
-        sec := GetStructMember(obj, 'second');
-        msec := GetStructMember(obj, 'microsecond') div 1000;
-        dt  := EncodeTime( h, mi, sec, msec );
-        Date := dt;
-        Result := True;
-    end
-    else if PyDelta_Check( obj ) then
-    begin
-      delta := PPyDateTime_Delta(obj);
-      dt := delta^.days + (delta^.seconds / (24*60*60)) + ((delta^.microseconds div 1000) / (24*60*60*1000));
+    member := PyObject_GetAttrString( obj, PAnsiChar(AMember) );
+    CheckError(False);
+    if PyInt_Check(member) then
+      Result := PyInt_AsLong(member)
+    else
+      raise EPythonError.CreateFmt('Unexpected type found in member %s of a time_struct object', [AMember]);
+    Py_XDecRef(member);
+  end;
+
+var
+  i, wd, jd, dl : Integer;
+  dt : TDateTime;
+  y, m, d, h, mi, sec, msec : WORD;
+  delta : PPyDateTime_Delta;
+begin
+  Result := False;
+  if PyTimeStruct_Check( obj ) then
+  begin
+      y   := GetStructMember( obj, 'tm_year' );
+      m   := GetStructMember( obj, 'tm_mon' );
+      d   := GetStructMember( obj, 'tm_mday' );
+      h   := GetStructMember( obj, 'tm_hour' );
+      mi  := GetStructMember( obj, 'tm_min' );
+      sec := GetStructMember( obj, 'tm_sec' );
+      //wd  := GetStructMember( obj, 'tm_wday' );
+      //jd  := GetStructMember( obj, 'tm_yday' );
+      //dl  := GetStructMember( obj, 'tm_isdst' );
+      dt := EncodeDate( y, m, d ) + EncodeTime( h, mi, sec, 0 );
       Date := dt;
       Result := True;
-    end
-    else if PyTuple_Check( obj ) and (PyTuple_Size(obj) = 9) then
-      begin
-        for i := 0 to 8 do
-          if not PyInt_Check(PyTuple_GetItem(obj, i)) then
-            Exit;
-        y   := PyInt_AsLong( PyTuple_GetItem(obj, 0) );
-        m   := PyInt_AsLong( PyTuple_GetItem(obj, 1) );
-        d   := PyInt_AsLong( PyTuple_GetItem(obj, 2) );
-        h   := PyInt_AsLong( PyTuple_GetItem(obj, 3) );
-        mi  := PyInt_AsLong( PyTuple_GetItem(obj, 4) );
-        sec := PyInt_AsLong( PyTuple_GetItem(obj, 5) );
-        wd  := PyInt_AsLong( PyTuple_GetItem(obj, 6) );
-        jd  := PyInt_AsLong( PyTuple_GetItem(obj, 7) );
-        dl  := PyInt_AsLong( PyTuple_GetItem(obj, 8) );
-        if not (m   in [1..12]) or
-           not (d   in [1..31]) or
-           not (h   in [0..23]) or
-           not (mi  in [0..59]) or
-           not (sec in [0..59]) or
-           not (wd  in [0..6]) or
-           not ((jd>=0) and (jd<=366)) or
-           not ((dl>=-1) and (dl<=1)) then
+  end
+  else if PyDateTime_Check( obj ) then
+  begin
+      y   := GetStructMember(obj, 'year');
+      m   := GetStructMember(obj, 'month');
+      d   := GetStructMember(obj, 'day');
+      h := GetStructMember(obj, 'hour');
+      mi := GetStructMember(obj, 'minute');
+      sec := GetStructMember(obj, 'second');
+      msec := GetStructMember(obj, 'microsecond') div 1000;
+      dt := EncodeDate( y, m, d ) + EncodeTime( h, mi, sec, msec );
+      Date := dt;
+      Result := True;
+  end
+  else if PyDate_Check( obj ) then
+  begin
+      y   := GetStructMember(obj, 'year');
+      m   := GetStructMember(obj, 'month');
+      d   := GetStructMember(obj, 'day');
+      dt  := EncodeDate( y, m, d );
+      Date := dt;
+      Result := True;
+  end
+  else if PyTime_Check( obj ) then
+  begin
+      h := GetStructMember(obj, 'hour');
+      mi := GetStructMember(obj, 'minute');
+      sec := GetStructMember(obj, 'second');
+      msec := GetStructMember(obj, 'microsecond') div 1000;
+      dt  := EncodeTime( h, mi, sec, msec );
+      Date := dt;
+      Result := True;
+  end
+  else if PyDelta_Check( obj ) then
+  begin
+    delta := PPyDateTime_Delta(obj);
+    dt := delta^.days + (delta^.seconds / (24*60*60)) + ((delta^.microseconds div 1000) / (24*60*60*1000));
+    Date := dt;
+    Result := True;
+  end
+  else if PyTuple_Check( obj ) and (PyTuple_Size(obj) = 9) then
+    begin
+      for i := 0 to 8 do
+        if not PyInt_Check(PyTuple_GetItem(obj, i)) then
           Exit;
-        try
-          dt := EncodeDate( y, m, d );
-          dt := dt + EncodeTime( h, mi, sec, 0 );
-          Date := dt;
-          Result := True;
-        except
-        end;
+      y   := PyInt_AsLong( PyTuple_GetItem(obj, 0) );
+      m   := PyInt_AsLong( PyTuple_GetItem(obj, 1) );
+      d   := PyInt_AsLong( PyTuple_GetItem(obj, 2) );
+      h   := PyInt_AsLong( PyTuple_GetItem(obj, 3) );
+      mi  := PyInt_AsLong( PyTuple_GetItem(obj, 4) );
+      sec := PyInt_AsLong( PyTuple_GetItem(obj, 5) );
+      wd  := PyInt_AsLong( PyTuple_GetItem(obj, 6) );
+      jd  := PyInt_AsLong( PyTuple_GetItem(obj, 7) );
+      dl  := PyInt_AsLong( PyTuple_GetItem(obj, 8) );
+      if not (m   in [1..12]) or
+         not (d   in [1..31]) or
+         not (h   in [0..23]) or
+         not (mi  in [0..59]) or
+         not (sec in [0..59]) or
+         not (wd  in [0..6]) or
+         not ((jd>=0) and (jd<=366)) or
+         not ((dl>=-1) and (dl<=1)) then
+        Exit;
+      try
+        dt := EncodeDate( y, m, d );
+        dt := dt + EncodeTime( h, mi, sec, 0 );
+        Date := dt;
+        Result := True;
+      except
       end;
-  end;
+    end;
+end;
+
+function TPythonEngine.PyObjectAsVariant( obj : PPyObject ) : Variant;
 
   function GetSequenceItem( sequence : PPyObject; idx : Integer ) : Variant;
   var
@@ -6096,7 +6094,7 @@ begin
     Result := PyUnicode_AsWideString(obj)
   else if PyString_Check(obj) then
     Result := PyObjectAsString(obj)
-  else if ExtractDate( Result ) then
+  else if ExtractDate(obj, Result ) then
     begin
       // Nothing to do
     end
@@ -6602,10 +6600,7 @@ end;
 
 function TPythonEngine.PyString_AsDelphiString(ob: PPyObject): string;
 begin
-  if PyUnicode_Check(ob) then
-    Result := string(PyUnicode_AsWideString(ob))
-  else
-    Result := string(PyString_AsString(ob));
+  result:=PyString_AsWideString(ob);
 end;
 
 function TPythonEngine.PyString_AsAnsiString( ob: PPyObject): AnsiString;
@@ -6621,7 +6616,8 @@ begin
   if PyUnicode_Check(ob) then
     Result := PyUnicode_AsWideString(ob)
   else
-    Result := UnicodeString(PyString_AsString(ob));
+    // otherwise go via unicode() in python
+    Result := PyObjectAsString(ob);
 end;
 
 function TPythonEngine.PyString_FromString( str: PAnsiChar): PPyObject;
@@ -9309,7 +9305,7 @@ begin
   inherited;
   with GetPythonEngine do
     begin
-      if PyArg_ParseTuple( args, 'O:CreateVar',@dv_object ) = 0 then
+      if PyArg_ParseTuple{$IFDEF DELPHI5}( args, 'O:CreateVar', [@dv_object] ){$ELSE}( args, 'O:CreateVar',@dv_object ){$ENDIF} = 0 then
         exit;
     end;
 end;
@@ -9620,7 +9616,7 @@ var
 begin
   with GetPythonEngine do
     begin
-      if PyArg_ParseTuple( args, 'i:SetDelayWrites',@val ) <> 0 then
+      if PyArg_ParseTuple{$IFDEF DELPHI5}( args, 'i:SetDelayWrites', [@val] ){$ELSE}( args, 'i:SetDelayWrites',@val ){$ENDIF} <> 0 then
         begin
           if IO <> nil then
             IO.DelayWrites := val <> 0;
@@ -9637,7 +9633,7 @@ var
 begin
   with GetPythonEngine do
     begin
-      if PyArg_ParseTuple( args, 'i:SetMaxLines',@val ) <> 0 then
+      if PyArg_ParseTuple{$IFDEF DELPHI5}( args, 'i:SetMaxLines',[@val] ){$ELSE}( args, 'i:SetMaxLines',@val ){$ENDIF} <> 0 then
         begin
           if IO <> nil then
             IO .MaxLines := val;
@@ -9730,9 +9726,11 @@ function  GetPythonEngine : TPythonEngine;
 begin
   if not Assigned( gPythonEngine ) then
     raise Exception.Create( 'No Python engine was created' );
-  if not gPythonEngine.Finalizing then
-    if not gPythonEngine.Initialized then
-      raise Exception.Create( 'The Python engine is not properly initialized' );
+  // vertec: commented out these checks, because we access GetPythonEngine
+  // instance before it is initialized
+  //if not gPythonEngine.Finalizing then
+  //   if not gPythonEngine.Initialized then
+  //    raise Exception.Create( 'The Python engine is not properly initialized' );
   Result := gPythonEngine;
 end;
 

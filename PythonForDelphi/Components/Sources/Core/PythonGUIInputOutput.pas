@@ -49,8 +49,15 @@ uses
 {$IFDEF MSWINDOWS}
   Windows, Messages,
 {$ENDIF}
-  SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
-  StdCtrls, PythonEngine;
+  SysUtils, Classes, Graphics,
+{$IFNDEF NO_VCL}
+  {$IFDEF DX+}
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
+  {$ELSE}
+  Controls, Forms, Dialogs, StdCtrls,
+  {$ENDIF}
+{$ENDIF}
+  PythonEngine;
 
 {$IFDEF MSWINDOWS}
 const
@@ -58,13 +65,12 @@ const
 {$ENDIF}
 
 type
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPythonGUIInputOutput = class(TPythonInputOutput)
   private
     { Private declarations }
+{$IFNDEF NO_VCL}
     FCustomMemo : TCustomMemo;
+{$ENDIF}
 {$IFDEF MSWINDOWS}
     FWinHandle : HWND;
 {$ENDIF}
@@ -85,12 +91,14 @@ type
     constructor Create( AOwner : TComponent ); override;
     destructor  Destroy; override;
 
+{$IFNDEF NO_VCL}
     procedure DisplayString( const str : string );
 
   published
     { Published declarations }
     property Output : TCustomMemo read FCustomMemo write FCustomMemo;
-  end;
+{$ENDIF}
+end;
 
 procedure Register;
 
@@ -109,9 +117,11 @@ Uses
 procedure TPythonGUIInputOutput.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
+{$IFNDEF NO_VCL}
   if Operation = opRemove then
     if aComponent = fCustomMemo then
       fCustomMemo := nil;
+{$ENDIF}
 end;
 
 {------------------------------------------------------------------------------}
@@ -128,16 +138,20 @@ procedure TPythonGUIInputOutput.SendData( const Data : AnsiString );
 begin
   if Assigned(FOnSendData) then
     inherited
+{$IFNDEF NO_VCL}
   else
     DisplayString( string(Data) );
+{$ENDIF}
 end;
 
 procedure TPythonGUIInputOutput.SendUniData(const Data: UnicodeString);
 begin
   if Assigned(FOnSendUniData) then
     inherited
+{$IFNDEF NO_VCL}
   else
     DisplayString( Data );
+{$ENDIF}
 end;
 
 {------------------------------------------------------------------------------}
@@ -149,7 +163,9 @@ begin
     Result := inherited ReceiveData
   else
   begin
+{$IFNDEF NO_VCL}
     InputQuery( 'Query from Python', 'Enter text', S);
+{$ENDIF}
     Result := AnsiString(S);
   end;
 end;
@@ -162,7 +178,9 @@ begin
     Result := inherited ReceiveUniData
   else
   begin
+{$IFNDEF NO_VCL}
     InputQuery( 'Query from Python', 'Enter text', S);
+{$ENDIF}
     Result := S;
   end;
 end;
@@ -184,7 +202,9 @@ begin
     Exit;
   S := FQueue.Strings[ 0 ];
   FQueue.Delete(0);
+{$IFNDEF NO_VCL}
   DisplayString( S )
+{$ENDIF}
 end;
 
 {PUBLIC METHODS}
@@ -206,6 +226,10 @@ begin
 {$IFDEF UNICODE}
    UnicodeIO := True;
 {$ENDIF}
+  FOnSendData      := nil;
+  FOnReceiveData   := nil;
+  FOnSendUniData   := nil;
+  FOnReceiveUniData:= nil;
 end;
 
 {------------------------------------------------------------------------------}
@@ -223,6 +247,7 @@ begin
 end;
 
 {------------------------------------------------------------------------------}
+{$IFNDEF NO_VCL}
 type
   TMyCustomMemo = class(TCustomMemo);
 
@@ -239,6 +264,7 @@ begin
 {$ENDIF}
   end;{if}
 end;
+{$ENDIF}
 
 {------------------------------------------------------------------------------}
 procedure Register;

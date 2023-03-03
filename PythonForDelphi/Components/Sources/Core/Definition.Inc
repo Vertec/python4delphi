@@ -1,4 +1,4 @@
-﻿(**************************************************************************)
+(**************************************************************************)
 (*                                                                        *)
 (* Module:   'Definition.Inc'          Copyright (c) 1998                 *)
 (*                                                                        *)
@@ -7,7 +7,7 @@
 (*                                     IBS Schillings GmbH & Co KG        *)
 (*                                     Ein Unternehmen der KROHNE-Gruppe  *)
 (*                                     Heisenbergstr. 18                  *)
-(*                                     50169 Kerpen-Türnich               *)
+(*                                     50169 Kerpen-T�rnich               *)
 (*                                     Phone: (49)22 37/97 44-0           *)
 (*                                                                        *)
 (**************************************************************************)
@@ -44,7 +44,7 @@
 // Python for Delphi settings. Comment out the setting you want to enable.
 /////////////////////////////////////////////////////////////////////////////
 
-{$DEFINE PREFER_UNICODE} // this will convert a variant containing an OleStr to a UniCode Python string.
+{.$DEFINE PREFER_UNICODE} // this will convert a variant containing an OleStr to a UniCode Python string.
 
 /////////////////////////////////////////////////////////////////////////////
 // OS symbols. Note that MSWINDOWS is defined from Delphi6/Kylix.
@@ -420,22 +420,21 @@
 // thus will edit this file.
 
 {$IFNDEF PYTHON38}
-  {$IFNDEF PYTHON37}
-    {$IFNDEF PYTHON36}
-      {$IFNDEF PYTHON35}
-        {$IFNDEF PYTHON34}
-          {$IFNDEF PYTHON33}
-            {$IFNDEF PYTHON32}
-              {$IFNDEF PYTHON31}
-                {$IFNDEF PYTHON30}
-                  {$IFNDEF PYTHON27}
-                    {$IFNDEF PYTHON26}
-                      {$IFNDEF PYTHON25}
-                        {$IFNDEF PYTHON24}
-                    {---<START OF DEFAULT PYTHON VERSION>---}
-                        {$DEFINE PYTHON27}
-                    {---<END OF DEFAULT PYTHON VERSION>---}
-                        {$ENDIF}
+{$IFNDEF PYTHON37}
+  {$IFNDEF PYTHON36}
+    {$IFNDEF PYTHON35}
+      {$IFNDEF PYTHON34}
+        {$IFNDEF PYTHON33}
+          {$IFNDEF PYTHON32}
+            {$IFNDEF PYTHON31}
+              {$IFNDEF PYTHON30}
+                {$IFNDEF PYTHON27}
+                  {$IFNDEF PYTHON26}
+                    {$IFNDEF PYTHON25}
+                      {$IFNDEF PYTHON24}
+                  {---<START OF DEFAULT PYTHON VERSION>---}
+                      {$DEFINE PYTHON27}
+                  {---<END OF DEFAULT PYTHON VERSION>---}
                       {$ENDIF}
                     {$ENDIF}
                   {$ENDIF}
@@ -447,6 +446,7 @@
       {$ENDIF}
     {$ENDIF}
   {$ENDIF}
+{$ENDIF}
 {$ENDIF}
 
 {$IFDEF PYTHON24}

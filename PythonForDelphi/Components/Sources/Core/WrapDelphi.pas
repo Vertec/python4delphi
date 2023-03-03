@@ -742,9 +742,6 @@ Type
      Method RegisterDelphiWrapper can be used to extend its functionality.
      Method EventHandlers.RegisterHandler can be used to add event handling functionality
   }
-  {$IF not Defined(FPC) and (CompilerVersion >= 23)}
-  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
-  {$IFEND}
   TPyDelphiWrapper = class(TEngineClient, IFreeNotificationSubscriber)
   private
     // Stores Delphi class registration information
@@ -1493,7 +1490,7 @@ begin
   begin
     // We adjust the transmitted self argument
     Adjust(@Self);
-    if PyArg_ParseTuple( args, ':Free' ) <> 0 then
+    if PyArg_ParseTuple( args, ':Free', [] ) <> 0 then
     begin
       if Owned or fCanFreeOwnedObject then begin
         DelphiObject := nil; // this will free the object automatically
@@ -2088,7 +2085,7 @@ begin
     with GetPythonEngine do
       PyErr_SetString( PyExc_SystemError^, PAnsiChar(AnsiString(Format('Wrapper %s does not support sequences', [Self.ClassName]))) );
   end
-  else if GetPythonEngine.PyArg_ParseTuple( args, ':ToList' ) <> 0 then
+  else if GetPythonEngine.PyArg_ParseTuple( args, ':ToList', [] ) <> 0 then
     with GetPythonEngine do
     begin
       Result := PyList_New(SqLength);
@@ -2111,7 +2108,7 @@ begin
     with GetPythonEngine do
       PyErr_SetString( PyExc_SystemError^, PAnsiChar(AnsiString(Format('Wrapper %s does not support sequences', [Self.ClassName]))) );
   end
-  else if GetPythonEngine.PyArg_ParseTuple( args, ':ToTuple' ) <> 0 then
+  else if GetPythonEngine.PyArg_ParseTuple( args, ':ToTuple', [] ) <> 0 then
     with GetPythonEngine do
     begin
       Result := PyTuple_New(SqLength);

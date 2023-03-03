@@ -45,7 +45,7 @@ type
     function PyObjectAsVariant( obj : PPyObject ) : Variant; override;
   published
     { Published declarations }
-  end deprecated;
+  end; // deprecated;
 
 procedure Register;
 
