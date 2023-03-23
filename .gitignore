@@ -3,12 +3,19 @@
 *.dcu
 *.obj
 *.exe
+*.dll
 *.bpl
 *.bpi
 *.dcp
 *.rsm
 *.stat
 *.map
+*.o
+*.ppu
+*.rsj
+*.compiled
+*.lib
+*.pyd
 
 # Generated source #
 ###################
@@ -17,6 +24,7 @@
 # Backup files    #
 ###################
 *.~*
+*.bak
 
 # IDE Files	  #
 ###################
@@ -39,6 +47,6 @@
 /__history
 *.bak
 *.Patch
-VirtualTreeView.zip
 *.#00
 *.pch
+/Tests/TestInsightSettings.ini
