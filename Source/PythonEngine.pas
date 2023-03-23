@@ -2013,7 +2013,6 @@ type
     property InitThreads: Boolean read FInitThreads write SetInitThreads default False;
     property IO: TPythonInputOutput read FIO write SetIO;
     property PyFlags: TPythonFlags read FPyFlags write SetPyFlags default [];
-    property PythonHome: string write SetPythonHome;
     property RedirectIO: Boolean read FRedirectIO write FRedirectIO default True;
     property UseWindowsConsole: Boolean read FUseWindowsConsole write FUseWindowsConsole default False;
     property OnAfterInit: TNotifyEvent read FOnAfterInit write FOnAfterInit;
